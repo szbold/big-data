@@ -1,0 +1,95 @@
+version: '3.7'
+
+services:
+  # 1. Baza Danych PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      # Ustawienia uwierzytelniania
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=analytics_db
+    ports:
+      - '5432:5432'
+    volumes:
+      # Wolumen dla trwałości danych
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - spark-net
+
+  # 2. Spark Master Node
+  spark-master:
+    # Używamy oficjalnego obrazu Apache Spark (np. w wersji 3.5.0)
+    image: apache/spark:3.5.0
+    container_name: spark-master
+    # Komenda uruchamia Mastera. Argument --host musi wskazywać na nazwę serwisu.
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master -h spark-master
+    environment:
+      # Lokalizacja do zapisu logów zdarzeń dla History Servera
+      - SPARK_EVENT_LOG_DIR=/opt/spark/events
+      - SPARK_DAEMON_JAVA_OPTS=-Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+    ports:
+      # Web UI Mastera (do podglądu aktywnych workerów)
+      - '8080:8080' 
+      # Port komunikacji RPC (wymagany do łączenia się workerów i spark-submit)
+      - '7077:7077'
+    volumes:
+      # Wspólny wolumen na logi i kod aplikacji
+      - spark-events:/opt/spark/events
+      - ./app:/opt/spark/app
+    networks:
+      - spark-net
+
+  # 3. Spark Worker Node
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: spark-worker
+    # Komenda uruchamia Workera, łącząc go z Masterem.
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      # Konfiguracja zasobów dla Workera
+      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_WEBUI_PORT=8081 # Port UI dla tego Workera (ważne, jeśli dodasz więcej workerów)
+    ports:
+      # Port UI dla Workera (do sprawdzenia jego statusu)
+      - '8081:8081'
+    depends_on:
+      - spark-master
+    volumes:
+      # Wspólny wolumen na logi i kod aplikacji
+      - spark-events:/opt/spark/events
+      - ./app:/opt/spark/app
+    networks:
+      - spark-net
+
+  # 4. Spark History Server (dla UI po zakończeniu joba)
+  spark-history-server:
+    image: apache/spark:3.5.0
+    container_name: spark-history-server
+    # Komenda uruchamia History Servera, wskazując katalog z logami.
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer
+    environment:
+      # Konfiguracja miejsca, z którego ma czytać logi
+      - SPARK_HISTORY_OPTS=-Dspark.history.fs.logDirectory=/opt/spark/events
+    ports:
+      # Web UI History Servera (główne UI po jobie)
+      - '18080:18080'
+    volumes:
+      # Musi mieć dostęp do tego samego wolumenu co Master i Worker
+      - spark-events:/opt/spark/events
+    depends_on:
+      - spark-master
+    networks:
+      - spark-net
+
+# Definicja wolumenów do trwałości danych
+volumes:
+  spark-events: # Wolumen dla logów Sparka
+  postgres-data: # Wolumen dla danych Postgresa
+
+# Definicja wspólnej sieci
+networks:
+  spark-net:
+    driver: bridge

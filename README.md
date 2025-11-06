@@ -9,3 +9,13 @@ docker exec -it postgres psql -U user -d analytics_db -c "SELECT * FROM top10_im
 
 /opt/spark/bin/spark-submit --master spark://spark-master:7077 /opt/spark/app/name_analysis.py - do części 3 :)
 ```
+
+
+Część 4
+```bash
+docker compose up -d
+docker exec -it spark-master bash
+
+/opt/spark/bin/spark-submit /opt/spark/app/name_analysis.py 
+/opt/spark/bin/spark-submit /opt/spark/app/4_zapis_danych.py 
+```

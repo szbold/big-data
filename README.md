@@ -19,3 +19,12 @@ docker exec -it spark-master bash
 /opt/spark/bin/spark-submit /opt/spark/app/name_analysis.py 
 /opt/spark/bin/spark-submit /opt/spark/app/4_zapis_danych.py 
 ```
+
+Część 7
+```
+docker compose up -d
+docker exec -it spark-master bash
+
+/opt/spark/bin/spark-submit /opt/spark/app/zadanie_7.py
+docker exec -it spark-master /opt/spark/sbin/start-thriftserver.sh --conf spark.sql.thriftserver.transport.mode=http --conf spark.sql.thriftserver.authentication=NOSASL
+```
